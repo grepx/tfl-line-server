@@ -33,9 +33,14 @@ func main() {
 	router := gin.New()
 	router.Use(gin.Logger())
 
+	router.GET("/test", test)
 	router.GET("/updateLines", updateLines)
 
 	router.Run(":" + port)
+}
+
+func test(c *gin.Context) {
+	c.String(http.StatusOK, "test works")
 }
 
 func updateLines(c *gin.Context) {

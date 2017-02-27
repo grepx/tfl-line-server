@@ -33,12 +33,12 @@ func main() {
 	router := gin.New()
 	router.Use(gin.Logger())
 
-	router.GET("/fetchForecast", fetchForecast)
+	router.GET("/updateLines", updateLines)
 
 	router.Run(":" + port)
 }
 
-func fetchForecast(c *gin.Context) {
+func updateLines(c *gin.Context) {
 	response := doNetworkCall()
 	for i := 0; i < 10; i++ {
 		c.String(http.StatusOK, fmt.Sprintf("Read from network: %s\n", response[i].Id))

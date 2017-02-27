@@ -23,12 +23,12 @@ func main() {
 		log.Fatal("$PORT must be set")
 	}
 
-	var err error
+	//var err error
 
-	db, err = sql.Open("postgres", os.Getenv("DATABASE_URL") + " sslmode=disable")
-	if err != nil {
-		log.Fatalf("Error opening database: %q", err)
-	}
+	//db, err = sql.Open("postgres", os.Getenv("DATABASE_URL") + " sslmode=disable")
+	//if err != nil {
+	//	log.Fatalf("Error opening database: %q", err)
+	//}
 
 	router := gin.New()
 	router.Use(gin.Logger())

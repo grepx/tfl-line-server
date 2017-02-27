@@ -17,6 +17,7 @@ var (
 )
 
 func main() {
+	log.Output(1, "gregz test logging")
 	port := os.Getenv("PORT")
 
 	if port == "" {

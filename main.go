@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"encoding/json"
+	"io/ioutil"
 )
 
 var (
@@ -35,7 +36,8 @@ func main() {
 	router.Use(gin.Logger())
 
 	router.GET("/test", test)
-	router.GET("/updateLines", updateLines)
+	router.GET("/getLineStatus", getLineStatus)
+	router.GET("/updateLineStatus", updateLineStatus)
 
 	router.Run(":" + port)
 }
@@ -44,12 +46,58 @@ func test(c *gin.Context) {
 	c.String(http.StatusOK, "test works")
 }
 
-func updateLines(c *gin.Context) {
-	response := doNetworkCall()
-	for i := 0; i < 10; i++ {
-		c.String(http.StatusOK, fmt.Sprintf("Read from network: %s\n", response[i].Id))
+func getLineStatus(c *gin.Context) {
+	statusJson := getLineStatusFromDatabase()
+	c.String(http.StatusOK, fmt.Sprintf("Read from database: %s\n", statusJson))
+}
+
+func getLineStatusFromDatabase() string {
+	return "no value"
+}
+
+func decodeLineStatusJson(statusJson string) []LineStatus {
+	byt := []byte(statusJson)
+	lineStatus := make([]LineStatus,0)
+
+	if err := json.Unmarshal(byt, &lineStatus); err != nil {
+		panic(err)
 	}
-	return
+	return lineStatus
+}
+
+// fetch the latest line status and update the database
+func updateLineStatus(c *gin.Context) {
+	statusJson, err := fetchStatusJson()
+	if (err == nil) {
+		c.String(http.StatusOK, fmt.Sprintf("Read from network: %s\n", statusJson))
+	}
+}
+
+func fetchStatusJson() (string, error) {
+	url := "https://api.tfl.gov.uk/Line/Mode/tube%2Coverground%2Cdlr/Status?detail=true"
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Fatal("NewRequest: ", err)
+		return "", err
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal("Do: ", err)
+		return "", err
+	}
+
+	defer resp.Body.Close()
+
+	bytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal("ReadAll: ", err)
+		return "", err
+	}
+	json := string(bytes)
+
+	return json, nil
 }
 
 type LineStatus struct {
@@ -58,29 +106,4 @@ type LineStatus struct {
 
 type LineStatusResponse struct {
 	Lines []LineStatus
-}
-
-func doNetworkCall() []LineStatus {
-	lineStatus := make([]LineStatus, 0)
-
-	url := "https://api.tfl.gov.uk/Line/Mode/tube%2Coverground%2Cdlr/Status?detail=true"
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		log.Fatal("NewRequest: ", err)
-		return lineStatus
-	}
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Fatal("Do: ", err)
-		return lineStatus
-	}
-
-	defer resp.Body.Close()
-
-	if err := json.NewDecoder(resp.Body).Decode(&lineStatus); err != nil {
-		log.Println(err)
-	}
-	return lineStatus
 }

@@ -103,9 +103,10 @@ func updateLineStatus(c *gin.Context) {
 	if (err != nil) {
 		return
 	}
-	printLines(c, linesJson)
 	// update database
-	//createTableIfNotExists(c)
+	insertInDatabase(c, linesJson)
+
+	printLines(c, linesJson)
 }
 
 func fetchLinesJson() (string, error) {
@@ -135,11 +136,23 @@ func fetchLinesJson() (string, error) {
 	return json, nil
 }
 
-func createTableIfNotExists(c *gin.Context) {
-	_, err := db.Exec("CREATE TABLE IF NOT EXISTS status (id integer, json text)");
-	if err != nil {
+func insertInDatabase(c *gin.Context, linesJson string) {
+	// create the table for the first time it doesn't exist
+	if _, err := db.Exec("CREATE TABLE IF NOT EXISTS status (json text)"); err != nil {
 		c.String(http.StatusInternalServerError,
-			fmt.Sprintf("Error creating database table: %q", err))
+			fmt.Sprintf("database error: %q", err))
+		return
+	}
+	// delete the last record if the table already existed
+	if _, err := db.Exec("DELETE FROM status"); err != nil {
+		c.String(http.StatusInternalServerError,
+			fmt.Sprintf("database error: %q", err))
+		return
+	}
+	// yep, I'm inserting json into a database, no idea how else to store it on heroku, open to suggestions
+	if _, err := db.Exec("INSERT INTO status VALUES ($1)", linesJson); err != nil {
+		c.String(http.StatusInternalServerError,
+			fmt.Sprintf("database error: %q", err))
 		return
 	}
 }

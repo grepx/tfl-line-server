@@ -25,55 +25,90 @@ func main() {
 		log.Fatal("$PORT must be set")
 	}
 
-	//var err error
+	var err error
 
-	//db, err = sql.Open("postgres", os.Getenv("DATABASE_URL") + " sslmode=disable")
-	//if err != nil {
-	//	log.Fatalf("Error opening database: %q", err)
-	//}
+	db, err = sql.Open("postgres", os.Getenv("DATABASE_URL") + " sslmode=disable")
+	if err != nil {
+		log.Fatalf("Error opening database: %q", err)
+		panic(err)
+	}
 
 	router := gin.New()
 	router.Use(gin.Logger())
 
-	router.GET("/test", test)
 	router.GET("/getLineStatus", getLineStatus)
 	router.GET("/updateLineStatus", updateLineStatus)
 
 	router.Run(":" + port)
 }
 
-func test(c *gin.Context) {
-	c.String(http.StatusOK, "test works")
-}
-
 func getLineStatus(c *gin.Context) {
-	statusJson := getLineStatusFromDatabase()
-	c.String(http.StatusOK, fmt.Sprintf("Read from database: %s\n", statusJson))
+	linesJson, err := getLinesFromDatabase(c)
+	if (err != nil) {
+		return
+	}
+	printLines(c, linesJson)
 }
 
-func getLineStatusFromDatabase() string {
-	return "no value"
+func printLines(c *gin.Context, linesJson string) {
+	lines := decodeLinesJson(linesJson)
+	for i := 0; i < len(lines); i++ {
+		c.String(http.StatusOK,
+			fmt.Sprintf("\n%s:\n", lines[i].Id))
+		printStatuses(c, lines[i].LineStatuses)
+	}
 }
 
-func decodeLineStatusJson(statusJson string) []LineStatus {
-	byt := []byte(statusJson)
-	lineStatus := make([]LineStatus,0)
+func printStatuses(c *gin.Context, lineStatus []LineStatus) {
+	for i := 0; i < len(lineStatus); i++ {
+		c.String(http.StatusOK,
+			fmt.Sprintf("%s\n", lineStatus[i].StatusSeverityDescription))
+	}
+}
 
-	if err := json.Unmarshal(byt, &lineStatus); err != nil {
+func getLinesFromDatabase(c *gin.Context) (string, error) {
+	rows, err := db.Query("SELECT json FROM status")
+	if err != nil {
+		c.String(http.StatusInternalServerError,
+			fmt.Sprintf("Couldn't load from database, perhaps it isn't created yet? err: %s", err))
+		return "", err
+	}
+
+	defer rows.Close()
+	var linesJson string
+	for rows.Next() {
+		if err := rows.Scan(&linesJson); err != nil {
+			c.String(http.StatusInternalServerError,
+				fmt.Sprintf("Error reading json record. err: %s", err))
+			return "", err
+		}
+	}
+	// there should only be 1 record in the database
+	return linesJson, nil
+}
+
+func decodeLinesJson(linesJson string) []Line {
+	byt := []byte(linesJson)
+	lines := make([]Line, 0)
+
+	if err := json.Unmarshal(byt, &lines); err != nil {
 		panic(err)
 	}
-	return lineStatus
+	return lines
 }
 
-// fetch the latest line status and update the database
 func updateLineStatus(c *gin.Context) {
-	statusJson, err := fetchStatusJson()
-	if (err == nil) {
-		c.String(http.StatusOK, fmt.Sprintf("Read from network: %s\n", statusJson))
+	// fetch latest status
+	linesJson, err := fetchLinesJson()
+	if (err != nil) {
+		return
 	}
+	printLines(c, linesJson)
+	// update database
+	//createTableIfNotExists(c)
 }
 
-func fetchStatusJson() (string, error) {
+func fetchLinesJson() (string, error) {
 	url := "https://api.tfl.gov.uk/Line/Mode/tube%2Coverground%2Cdlr/Status?detail=true"
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -100,10 +135,21 @@ func fetchStatusJson() (string, error) {
 	return json, nil
 }
 
-type LineStatus struct {
-	Id string `json:"id"`
+func createTableIfNotExists(c *gin.Context) {
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS status (id integer, json text)");
+	if err != nil {
+		c.String(http.StatusInternalServerError,
+			fmt.Sprintf("Error creating database table: %q", err))
+		return
+	}
 }
 
-type LineStatusResponse struct {
-	Lines []LineStatus
+type Line struct {
+	Id           string `json:"id"`
+	LineStatuses []LineStatus `json:"lineStatuses"`
+}
+
+type LineStatus struct {
+	Id                        int `json:"id"`
+	StatusSeverityDescription string `json:"statusSeverityDescription"`
 }

@@ -114,7 +114,7 @@ func updateLineStatus(c *gin.Context) {
 	printLines(c, linesJson)
 
 	// send notification
-	lines := decodeLinesJson(linesJson)
+	//lines := decodeLinesJson(linesJson)
 
 }
 

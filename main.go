@@ -11,6 +11,7 @@ import (
 	_ "github.com/lib/pq"
 	"encoding/json"
 	"io/ioutil"
+	"strconv"
 )
 
 var (
@@ -29,7 +30,18 @@ func main() {
 	var err error
 
 	// open database connection
-	db, err = sql.Open("postgres", os.Getenv("DATABASE_URL"))
+	enableDatabaseSsl, err := strconv.ParseBool(os.Getenv("ENABLE_DATABASE_SSL"))
+	if (err != nil) {
+		log.Fatalf("Config error %q", err)
+		panic(err)
+	}
+
+	databaseUrl := os.Getenv("DATABASE_URL")
+	if (!enableDatabaseSsl) {
+		databaseUrl += " sslmode=disable"
+	}
+
+	db, err = sql.Open("postgres", databaseUrl)
 	if err != nil {
 		log.Fatalf("Error opening database: %q", err)
 		panic(err)

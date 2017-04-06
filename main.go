@@ -29,7 +29,7 @@ func main() {
 	var err error
 
 	// open database connection
-	db, err = sql.Open("postgres", os.Getenv("DATABASE_URL") + " sslmode=disable")
+	db, err = sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatalf("Error opening database: %q", err)
 		panic(err)

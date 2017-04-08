@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"strconv"
+	"github.com/NaySoftware/go-fcm"
 )
 
 var (
@@ -120,14 +121,18 @@ func updateLineStatus(c *gin.Context) {
 	if (err != nil) {
 		return
 	}
-	// update database
-	insertInDatabase(c, linesJson)
 
-	printLines(c, linesJson)
+	c.String(http.StatusOK, "--- Previous line status ---")
+	getLineStatus(c)
 
 	// send notification
 	//lines := decodeLinesJson(linesJson)
 
+	// update database
+	insertInDatabase(c, linesJson)
+
+	c.String(http.StatusOK, "\n--- Updated line status ---")
+	printLines(c, linesJson)
 }
 
 func fetchLinesJson() (string, error) {
@@ -178,37 +183,6 @@ func insertInDatabase(c *gin.Context, linesJson string) {
 	}
 }
 
-func sendLineStatusNotification(lineId string, status string) (string, error) {
-	url := "https://fcm.googleapis.com/fcm/send"
-
-	req, err := http.NewRequest("POST", url, nil)
-	if err != nil {
-		log.Fatal("NewRequest: ", err)
-		return "", err
-	}
-
-	req.Header.Add("Authorization", "key=" + firebaseKey)
-	req.Header.Add("Content-Type", "application/json")
-	
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Fatal("Do: ", err)
-		return "", err
-	}
-
-	defer resp.Body.Close()
-
-	bytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal("ReadAll: ", err)
-		return "", err
-	}
-	json := string(bytes)
-
-	return json, nil
-}
-
 type Line struct {
 	Id           string `json:"id"`
 	LineStatuses []LineStatus `json:"lineStatuses"`
@@ -217,4 +191,22 @@ type Line struct {
 type LineStatus struct {
 	Id                        int `json:"id"`
 	StatusSeverityDescription string `json:"statusSeverityDescription"`
+}
+
+func sendStatusNotification(lineName string, lineStatus string) {
+	data := map[string]string{
+		"msg": lineName + " status: " + lineStatus,
+		"sum": "Happy Day",
+	}
+
+	c := fcm.NewFcmClient(firebaseKey)
+	c.NewFcmMsgTo(lineName, data)
+
+	status, err := c.Send()
+
+	if err == nil {
+		status.PrintResults()
+	} else {
+		fmt.Println(err)
+	}
 }

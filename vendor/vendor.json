@@ -1,7 +1,14 @@
 {
 	"comment": "",
+	"heroku.goVersion": "go1.8",
 	"ignore": "test",
 	"package": [
+		{
+			"checksumSHA1": "KRVwJaK+eoA/1Z7gJbfugATpnB8=",
+			"path": "github.com/NaySoftware/go-fcm",
+			"revision": "8b8dc5883a3bfd52fd4d296d2ab89aa1b703aed4",
+			"revisionTime": "2017-02-05T15:54:36Z"
+		},
 		{
 			"checksumSHA1": "Qq7Gzany1n6gK6hpZQq9UXFhGGo=",
 			"comment": "v1.0rc1-110-g4cc2de6",
@@ -71,6 +78,5 @@
 			"revision": "d627af88ac021317a280d320986282a6dc97549a"
 		}
 	],
-	"rootPath": "github.com/grepx/tfl-line-server",
-	"heroku.goVersion": "go1.7.1"
+	"rootPath": "github.com/grepx/tfl-line-server"
 }

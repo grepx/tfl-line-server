@@ -56,6 +56,7 @@ func main() {
 
 	router.GET("/getLineStatus", getLineStatus)
 	router.GET("/updateLineStatus", updateLineStatus)
+	router.GET("/sendPushNotification", sendPushNotification)
 
 	router.Run(":" + port)
 }
@@ -193,6 +194,11 @@ type LineStatus struct {
 	StatusSeverityDescription string `json:"statusSeverityDescription"`
 }
 
+func sendPushNotification(c *gin.Context) {
+	sendStatusNotification("northern", "no service")
+	c.String(http.StatusOK, "push notification sent")
+}
+
 func sendStatusNotification(lineName string, lineStatus string) {
 	data := map[string]string{
 		"msg": lineName + " status: " + lineStatus,
@@ -200,7 +206,7 @@ func sendStatusNotification(lineName string, lineStatus string) {
 	}
 
 	c := fcm.NewFcmClient(firebaseKey)
-	c.NewFcmMsgTo(lineName, data)
+	c.NewFcmMsgTo("/topics/" + lineName, data)
 
 	status, err := c.Send()
 

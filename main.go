@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"strconv"
 	"github.com/NaySoftware/go-fcm"
+	"time"
 )
 
 var (
@@ -195,7 +196,25 @@ type LineStatus struct {
 }
 
 func sendPushNotification(c *gin.Context) {
-	sendStatusNotification("northern", "no service")
+	ticker := time.NewTicker(10 * time.Second)
+	quit := make(chan struct{})
+	count := 0
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				sendStatusNotification("northern", "no service" + string(count))
+				count += 1
+				if (count > 5) {
+					close(quit)
+				}
+			// do stuff
+			case <-quit:
+				ticker.Stop()
+				return
+			}
+		}
+	}()
 	c.String(http.StatusOK, "push notification sent")
 }
 

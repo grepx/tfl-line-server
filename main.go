@@ -196,16 +196,20 @@ type LineStatus struct {
 }
 
 func sendPushNotification(c *gin.Context) {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(15 * time.Second)
+	startTime := time.Now().UTC().String()
 	quit := make(chan struct{})
 	count := 0
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
-				sendStatusNotification("northern", "no service" + string(count))
+			//sendStatusNotification("northern", "no service" + strconv.Itoa(count))
 				count += 1
-				if (count > 5) {
+				logLine := fmt.Sprintf("Start Time: %q, Tick number: %d", startTime, count)
+				log.Output(1, logLine)
+			// can it live for a whole hour without dying?
+				if (count > 240) {
 					close(quit)
 				}
 			// do stuff

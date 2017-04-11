@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"github.com/NaySoftware/go-fcm"
 	"time"
+	"errors"
 )
 
 var (
@@ -55,56 +56,45 @@ func main() {
 	router := gin.New()
 	router.Use(gin.Logger())
 
-	router.GET("/getLineStatus", getLineStatus)
-	router.GET("/updateLineStatus", updateLineStatus)
-	router.GET("/sendPushNotification", sendPushNotification)
+	router.GET("/startService", startService)
 
 	router.Run(":" + port)
 }
 
-func getLineStatus(c *gin.Context) {
-	linesJson, err := getLinesFromDatabase(c)
-	if (err != nil) {
-		return
-	}
-	printLines(c, linesJson)
-}
+func startService(c *gin.Context) {
+	// todo: add api key code
+	// just spawn a timer that keeps calling on a go channel every 10 seconds
+	ticker := time.NewTicker(10 * time.Second)
+	startTime := time.Now().UTC().String()
+	quit := make(chan struct{})
+	count := 1
 
-func printLines(c *gin.Context, linesJson string) {
-	lines := decodeLinesJson(linesJson)
-	for i := 0; i < len(lines); i++ {
-		c.String(http.StatusOK,
-			fmt.Sprintf("\n%s:\n", lines[i].Id))
-		printStatuses(c, lines[i].LineStatuses)
-	}
-}
-
-func printStatuses(c *gin.Context, lineStatus []LineStatus) {
-	for i := 0; i < len(lineStatus); i++ {
-		c.String(http.StatusOK,
-			fmt.Sprintf("%s\n", lineStatus[i].StatusSeverityDescription))
-	}
-}
-
-func getLinesFromDatabase(c *gin.Context) (string, error) {
-	rows, err := db.Query("SELECT json FROM status")
-	if err != nil {
-		c.String(http.StatusInternalServerError,
-			fmt.Sprintf("Couldn't load from database, perhaps it isn't created yet? err: %s", err))
-		return "", err
-	}
-
-	defer rows.Close()
-	var linesJson string
-	for rows.Next() {
-		if err := rows.Scan(&linesJson); err != nil {
-			c.String(http.StatusInternalServerError,
-				fmt.Sprintf("Error reading json record. err: %s", err))
-			return "", err
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				pollLineStatus(startTime, count * 10)
+			// run it for 10 minutes and 10 seconds
+			// by which point the next service poll has probably kicked in or will soon
+				if (count >= 62) {
+					close(quit)
+				}
+				count += 1
+			case <-quit:
+				ticker.Stop()
+				return
+			}
 		}
-	}
-	// there should only be 1 record in the database
-	return linesJson, nil
+	}()
+	// return right away with success
+	c.String(http.StatusOK, "service started")
+}
+
+func pollLineStatus(startTime string, secondsCount int) {
+	logMessage :=
+		fmt.Sprintf("Polling for latest line status. Seconds: %d, Start Time: %q",
+			secondsCount, startTime)
+	log.Output(1, logMessage)
 }
 
 func decodeLinesJson(linesJson string) []Line {
@@ -117,24 +107,41 @@ func decodeLinesJson(linesJson string) []Line {
 	return lines
 }
 
-func updateLineStatus(c *gin.Context) {
+func updateLineStatus() {
 	// fetch latest status
-	linesJson, err := fetchLinesJson()
+	currentLinesJson, err := fetchLinesJson()
 	if (err != nil) {
 		return
 	}
 
-	c.String(http.StatusOK, "--- Previous line status ---")
-	getLineStatus(c)
+	oldLinesJson, err := getLinesFromDatabase()
+	if (err != nil) {
+		return
+	}
 
 	// send notification
-	//lines := decodeLinesJson(linesJson)
+	currentLines := decodeLinesJson(currentLinesJson)
+	oldLines := decodeLinesJson(oldLinesJson)
+
+	compareAndNotify(oldLines, currentLines)
 
 	// update database
-	insertInDatabase(c, linesJson)
+	insertInDatabase(currentLinesJson)
+}
 
-	c.String(http.StatusOK, "\n--- Updated line status ---")
-	printLines(c, linesJson)
+func compareAndNotify(oldLines []Line, currentLines []Line) {
+	//for _, line := range oldLines {
+	// todo
+	//}
+}
+
+func getLineWithId(lines []Line, id string) (Line, error) {
+	for _, line := range lines {
+		if (line.Id == id) {
+			return line, nil
+		}
+	}
+	return Line{}, errors.New("no line with that id")
 }
 
 func fetchLinesJson() (string, error) {
@@ -164,25 +171,41 @@ func fetchLinesJson() (string, error) {
 	return json, nil
 }
 
-func insertInDatabase(c *gin.Context, linesJson string) {
+func insertInDatabase(linesJson string) {
 	// create the table for the first time it doesn't exist
 	if _, err := db.Exec("CREATE TABLE IF NOT EXISTS status (json text)"); err != nil {
-		c.String(http.StatusInternalServerError,
-			fmt.Sprintf("database error: %q", err))
+		log.Output(1, fmt.Sprintf("database error: %q", err))
 		return
 	}
 	// delete the last record if the table already existed
 	if _, err := db.Exec("DELETE FROM status"); err != nil {
-		c.String(http.StatusInternalServerError,
-			fmt.Sprintf("database error: %q", err))
+		log.Output(1, fmt.Sprintf("database error: %q", err))
 		return
 	}
 	// yep, I'm inserting json into a database, no idea how else to store it on heroku, open to suggestions
 	if _, err := db.Exec("INSERT INTO status VALUES ($1)", linesJson); err != nil {
-		c.String(http.StatusInternalServerError,
-			fmt.Sprintf("database error: %q", err))
+		log.Output(1, fmt.Sprintf("database error: %q", err))
 		return
 	}
+}
+
+func getLinesFromDatabase() (string, error) {
+	rows, err := db.Query("SELECT json FROM status")
+	if err != nil {
+		log.Output(1, fmt.Sprintf("Couldn't load from database, perhaps it isn't created yet? err: %s", err))
+		return "", err
+	}
+
+	defer rows.Close()
+	var linesJson string
+	for rows.Next() {
+		if err := rows.Scan(&linesJson); err != nil {
+			log.Output(1, fmt.Sprintf("Error reading json record. err: %s", err))
+			return "", err
+		}
+	}
+	// there should only be 1 record in the database
+	return linesJson, nil
 }
 
 type Line struct {
@@ -193,33 +216,6 @@ type Line struct {
 type LineStatus struct {
 	Id                        int `json:"id"`
 	StatusSeverityDescription string `json:"statusSeverityDescription"`
-}
-
-func sendPushNotification(c *gin.Context) {
-	ticker := time.NewTicker(15 * time.Second)
-	startTime := time.Now().UTC().String()
-	quit := make(chan struct{})
-	count := 0
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-			//sendStatusNotification("northern", "no service" + strconv.Itoa(count))
-				count += 1
-				logLine := fmt.Sprintf("Start Time: %q, Tick number: %d", startTime, count)
-				log.Output(1, logLine)
-			// can it live for a whole hour without dying?
-				if (count > 240) {
-					close(quit)
-				}
-			// do stuff
-			case <-quit:
-				ticker.Stop()
-				return
-			}
-		}
-	}()
-	c.String(http.StatusOK, "push notification sent")
 }
 
 func sendStatusNotification(lineName string, lineStatus string) {

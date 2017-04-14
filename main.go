@@ -107,6 +107,8 @@ func pollLineStatus() {
 
 	if (previousLines != nil) {
 		checkLineStatuses(currentLines)
+	} else {
+		log.Output(1, "WARNING: there was no previous line state, you must be starting up for the first time?")
 	}
 
 	previousLines = currentLines;
@@ -123,6 +125,7 @@ func checkLineStatuses(currentLines map[string]Line) {
 			sendStatusNotification(line.Id, lineStatus.StatusSeverity,
 				lineStatus.StatusSeverityDescription, lineStatus.Reason)
 		}
+		log.Output(1, "checked line " + lineId)
 	}
 }
 

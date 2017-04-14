@@ -42,8 +42,14 @@ func main() {
 	router.Use(gin.Logger())
 
 	router.GET("/startService", startService)
+	router.GET("/doTestPushNotification", doTestPushNotification)
 
 	router.Run(":" + port)
+}
+
+func doTestPushNotification(c *gin.Context) {
+	sendStatusNotification("test-line", 10, "major delays", "person on the tracks")
+	c.String(http.StatusOK, "sent test notification")
 }
 
 func startService(c *gin.Context) {
@@ -107,12 +113,10 @@ func checkLineStatuses(currentLines map[string]Line) {
 		previousLineStatus := previousLine.LineStatuses[0]
 		if (lineStatus.StatusSeverity != previousLineStatus.StatusSeverity) {
 			// send push notification with the new status
-			//sendStatusNotification(line.Id, lineStatus.StatusSeverity,
-			//	lineStatus.StatusSeverityDescription, lineStatus.Reason)
+			sendStatusNotification(line.Id, lineStatus.StatusSeverity,
+				lineStatus.StatusSeverityDescription, lineStatus.Reason)
 		}
 		log.Output(1, "checked line " + lineId)
-		sendStatusNotification(line.Id, lineStatus.StatusSeverity,
-			lineStatus.StatusSeverityDescription, lineStatus.Reason)
 	}
 }
 

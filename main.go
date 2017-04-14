@@ -83,6 +83,7 @@ func startService(c *gin.Context) {
 			// don't let it run forever, just for 1000 seconds, 16 minutes
 				secondsCount += 10
 				if (secondsCount > 1000) {
+					log.Output(1, "WARNING: something happened and the timer kept running after it should have reset.")
 					close(quitChannel)
 				}
 			case <-quitChannel:

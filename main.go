@@ -14,12 +14,13 @@ import (
 	"strconv"
 	"github.com/NaySoftware/go-fcm"
 	"time"
-	"errors"
 )
 
 var (
 	db     *sql.DB
 	firebaseKey string
+	quitChannel chan struct{}
+	previousLines map[string]Line
 )
 
 func main() {
@@ -63,24 +64,28 @@ func main() {
 
 func startService(c *gin.Context) {
 	// todo: add api key code
-	// just spawn a timer that keeps calling on a go channel every 10 seconds
+	// switch off any previous service
+	if (quitChannel != nil) {
+		close(quitChannel)
+	}
+	// spawn a timer that keeps calling on a go channel every 10 seconds
+	// this will run until the next startService call shuts it down
 	ticker := time.NewTicker(10 * time.Second)
-	startTime := time.Now().UTC().String()
-	quit := make(chan struct{})
-	count := 1
+	quitChannel = make(chan struct{})
+	secondsCount := 0
 
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
-				pollLineStatus(startTime, count * 10)
-			// run it for 10 minutes and 10 seconds
-			// by which point the next service poll has probably kicked in or will soon
-				if (count >= 62) {
-					close(quit)
+				pollLineStatus()
+			// in the unlikely case that a service doesn't get shut down correctly,
+			// don't let it run forever, just for 1000 seconds, 16 minutes
+				secondsCount += 10
+				if (secondsCount > 1000) {
+					close(quitChannel)
 				}
-				count += 1
-			case <-quit:
+			case <-quitChannel:
 				ticker.Stop()
 				return
 			}
@@ -90,58 +95,49 @@ func startService(c *gin.Context) {
 	c.String(http.StatusOK, "service started")
 }
 
-func pollLineStatus(startTime string, secondsCount int) {
-	logMessage :=
-		fmt.Sprintf("Polling for latest line status. Seconds: %d, Start Time: %q",
-			secondsCount, startTime)
-	log.Output(1, logMessage)
+func pollLineStatus() {
+	log.Output(1, "Polling line status")
+	currentLinesJson, err := fetchLinesJson()
+	if (err != nil) {
+		return
+	}
+
+	currentLines := decodeLines(currentLinesJson)
+
+	if (previousLines != nil) {
+		checkLineStatuses(currentLines)
+	}
+
+	previousLines = currentLines;
 }
 
-func decodeLinesJson(linesJson string) []Line {
+func checkLineStatuses(currentLines map[string]Line) {
+	for lineId, line := range currentLines {
+		// just check the first line status (seems like the list isn't really used?)
+		lineStatus := line.LineStatuses[0]
+		previousLine := previousLines[lineId]
+		previousLineStatus := previousLine.LineStatuses[0]
+		if (lineStatus.StatusSeverity != previousLineStatus.StatusSeverity) {
+			// send push notification with the new status
+			sendStatusNotification(line.Id, lineStatus.StatusSeverity,
+				lineStatus.StatusSeverityDescription, lineStatus.Reason)
+		}
+	}
+}
+
+func decodeLines(linesJson string) map[string]Line {
 	byt := []byte(linesJson)
 	lines := make([]Line, 0)
 
 	if err := json.Unmarshal(byt, &lines); err != nil {
 		panic(err)
 	}
-	return lines
-}
 
-func updateLineStatus() {
-	// fetch latest status
-	currentLinesJson, err := fetchLinesJson()
-	if (err != nil) {
-		return
-	}
-
-	oldLinesJson, err := getLinesFromDatabase()
-	if (err != nil) {
-		return
-	}
-
-	// send notification
-	currentLines := decodeLinesJson(currentLinesJson)
-	oldLines := decodeLinesJson(oldLinesJson)
-
-	compareAndNotify(oldLines, currentLines)
-
-	// update database
-	insertInDatabase(currentLinesJson)
-}
-
-func compareAndNotify(oldLines []Line, currentLines []Line) {
-	//for _, line := range oldLines {
-	// todo
-	//}
-}
-
-func getLineWithId(lines []Line, id string) (Line, error) {
+	lineMap := make(map[string]Line)
 	for _, line := range lines {
-		if (line.Id == id) {
-			return line, nil
-		}
+		lineMap[line.Id] = line
 	}
-	return Line{}, errors.New("no line with that id")
+	return lineMap
 }
 
 func fetchLinesJson() (string, error) {
@@ -215,17 +211,20 @@ type Line struct {
 
 type LineStatus struct {
 	Id                        int `json:"id"`
+	StatusSeverity            int `json:"statusSeverity"`
 	StatusSeverityDescription string `json:"statusSeverityDescription"`
+	Reason                    string `json:reason`
 }
 
-func sendStatusNotification(lineName string, lineStatus string) {
+func sendStatusNotification(lineId string, lineStatus int, lineStatusDescription string, reason string) {
 	data := map[string]string{
-		"msg": lineName + " status: " + lineStatus,
+		"msg": lineId + " status: " + lineStatusDescription,
 		"sum": "Happy Day",
 	}
+	log.Output(1, "Sending push notification: " + data["msg"])
 
 	c := fcm.NewFcmClient(firebaseKey)
-	c.NewFcmMsgTo("/topics/" + lineName, data)
+	c.NewFcmMsgTo("/topics/" + lineId, data)
 
 	status, err := c.Send()
 

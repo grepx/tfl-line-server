@@ -174,10 +174,12 @@ func sendStatusNotification(lineId string, lineStatus int, lineStatusDescription
 	data := map[string]string{
 		"lineId": lineId,
 		"lineStatus": strconv.Itoa(lineStatus),
-		"lineStatusDescription": lineId,
-		"reason": lineId,
+		"lineStatusDescription": lineStatusDescription,
+		"reason": reason,
 	}
-	log.Output(1, "Sending push notification: " + data["msg"])
+
+	dataJson, _ := json.Marshal(data)
+	log.Output(1, "Sending push notification: " + string(dataJson))
 
 	c := fcm.NewFcmClient(firebaseKey)
 	c.NewFcmMsgTo("/topics/" + lineId, data)

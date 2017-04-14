@@ -17,6 +17,7 @@ import (
 
 var (
 	firebaseKey string
+	pollingIntervalSeconds int
 	quitChannel chan struct{}
 	previousLines map[string]Line
 )
@@ -30,6 +31,12 @@ func main() {
 
 	// load firebase key
 	firebaseKey = os.Getenv("FIREBASE_KEY")
+
+	var err error
+	pollingIntervalSeconds, err = strconv.Atoi(os.Getenv("POLLING_INTERVAL_SECONDS"))
+	if (err != nil) {
+		log.Fatal("$POLLING_INTERVAL_SECONDS must be set")
+	}
 
 	router := gin.New()
 	router.Use(gin.Logger())
@@ -47,7 +54,8 @@ func startService(c *gin.Context) {
 	}
 	// spawn a timer that keeps calling on a go channel every 10 seconds
 	// this will run until the next startService call shuts it down
-	ticker := time.NewTicker(10 * time.Second)
+	log.Output(1, fmt.Sprintf("Starting a service that runs every %d seconds", pollingIntervalSeconds))
+	ticker := time.NewTicker(time.Duration(pollingIntervalSeconds) * time.Second)
 	quitChannel = make(chan struct{})
 	secondsCount := 0
 

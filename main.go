@@ -5,50 +5,26 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"database/sql"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"encoding/json"
 	"io/ioutil"
-	"strconv"
 	"github.com/NaySoftware/go-fcm"
 	"time"
 )
 
 var (
-	db     *sql.DB
 	firebaseKey string
 	quitChannel chan struct{}
 	previousLines map[string]Line
 )
 
 func main() {
-	log.Output(1, "gregz test logging")
 	port := os.Getenv("PORT")
 
 	if port == "" {
 		log.Fatal("$PORT must be set")
-	}
-
-	var err error
-
-	// open database connection
-	enableDatabaseSsl, err := strconv.ParseBool(os.Getenv("ENABLE_DATABASE_SSL"))
-	if (err != nil) {
-		log.Fatalf("Config error %q", err)
-		panic(err)
-	}
-
-	databaseUrl := os.Getenv("DATABASE_URL")
-	if (!enableDatabaseSsl) {
-		databaseUrl += " sslmode=disable"
-	}
-
-	db, err = sql.Open("postgres", databaseUrl)
-	if err != nil {
-		log.Fatalf("Error opening database: %q", err)
-		panic(err)
 	}
 
 	// load firebase key
@@ -169,43 +145,6 @@ func fetchLinesJson() (string, error) {
 	json := string(bytes)
 
 	return json, nil
-}
-
-func insertInDatabase(linesJson string) {
-	// create the table for the first time it doesn't exist
-	if _, err := db.Exec("CREATE TABLE IF NOT EXISTS status (json text)"); err != nil {
-		log.Output(1, fmt.Sprintf("database error: %q", err))
-		return
-	}
-	// delete the last record if the table already existed
-	if _, err := db.Exec("DELETE FROM status"); err != nil {
-		log.Output(1, fmt.Sprintf("database error: %q", err))
-		return
-	}
-	// yep, I'm inserting json into a database, no idea how else to store it on heroku, open to suggestions
-	if _, err := db.Exec("INSERT INTO status VALUES ($1)", linesJson); err != nil {
-		log.Output(1, fmt.Sprintf("database error: %q", err))
-		return
-	}
-}
-
-func getLinesFromDatabase() (string, error) {
-	rows, err := db.Query("SELECT json FROM status")
-	if err != nil {
-		log.Output(1, fmt.Sprintf("Couldn't load from database, perhaps it isn't created yet? err: %s", err))
-		return "", err
-	}
-
-	defer rows.Close()
-	var linesJson string
-	for rows.Next() {
-		if err := rows.Scan(&linesJson); err != nil {
-			log.Output(1, fmt.Sprintf("Error reading json record. err: %s", err))
-			return "", err
-		}
-	}
-	// there should only be 1 record in the database
-	return linesJson, nil
 }
 
 type Line struct {

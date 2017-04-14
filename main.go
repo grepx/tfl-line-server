@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"github.com/NaySoftware/go-fcm"
 	"time"
+	"strconv"
 )
 
 var (
@@ -98,10 +99,12 @@ func checkLineStatuses(currentLines map[string]Line) {
 		previousLineStatus := previousLine.LineStatuses[0]
 		if (lineStatus.StatusSeverity != previousLineStatus.StatusSeverity) {
 			// send push notification with the new status
-			sendStatusNotification(line.Id, lineStatus.StatusSeverity,
-				lineStatus.StatusSeverityDescription, lineStatus.Reason)
+			//sendStatusNotification(line.Id, lineStatus.StatusSeverity,
+			//	lineStatus.StatusSeverityDescription, lineStatus.Reason)
 		}
 		log.Output(1, "checked line " + lineId)
+		sendStatusNotification(line.Id, lineStatus.StatusSeverity,
+			lineStatus.StatusSeverityDescription, lineStatus.Reason)
 	}
 }
 
@@ -161,8 +164,10 @@ type LineStatus struct {
 
 func sendStatusNotification(lineId string, lineStatus int, lineStatusDescription string, reason string) {
 	data := map[string]string{
-		"msg": lineId + " status: " + lineStatusDescription,
-		"sum": "Happy Day",
+		"lineId": lineId,
+		"lineStatus": strconv.Itoa(lineStatus),
+		"lineStatusDescription": lineId,
+		"reason": lineId,
 	}
 	log.Output(1, "Sending push notification: " + data["msg"])
 

@@ -16,6 +16,7 @@ import (
 )
 
 var (
+	apiKey string
 	firebaseKey string
 	pollingIntervalSeconds int
 	quitChannel chan struct{}
@@ -28,6 +29,10 @@ func main() {
 	if port == "" {
 		log.Fatal("$PORT must be set")
 	}
+
+	// load the api key from config
+	// this is used to protect the endpoints from unknown callers
+	apiKey = os.Getenv("API_KEY")
 
 	// load firebase key
 	firebaseKey = os.Getenv("FIREBASE_KEY")
@@ -47,13 +52,27 @@ func main() {
 	router.Run(":" + port)
 }
 
+func checkApiKeyIsValid(c *gin.Context) bool {
+	apiKeyParam := c.Query("apiKey")
+	if (apiKey != apiKeyParam) {
+		log.Output(1, "API KEY mistmatch: " + apiKeyParam)
+		return false
+	}
+	return true
+}
+
 func doTestPushNotification(c *gin.Context) {
+	if (!checkApiKeyIsValid(c)) {
+		return
+	}
 	sendStatusNotification("test-line", 10, "major delays", "person on the tracks")
 	c.String(http.StatusOK, "sent test notification")
 }
 
 func startService(c *gin.Context) {
-	// todo: add api key code
+	if (!checkApiKeyIsValid(c)) {
+		return
+	}
 	// switch off any previous service
 	if (quitChannel != nil) {
 		close(quitChannel)

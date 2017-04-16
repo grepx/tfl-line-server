@@ -65,7 +65,11 @@ func doTestPushNotification(c *gin.Context) {
 	if (!checkApiKeyIsValid(c)) {
 		return
 	}
-	sendStatusNotification("test-line", 10, "major delays", "person on the tracks")
+	lineId := c.Query("lineId")
+	lineStatus, _ := strconv.Atoi(c.Query("lineStatus"))
+	lineStatusDescription := c.Query("lineStatusDescription")
+	reason := c.Query("reason")
+	sendStatusNotification(lineId, lineStatus, lineStatusDescription, reason)
 	c.String(http.StatusOK, "sent test notification")
 }
 
